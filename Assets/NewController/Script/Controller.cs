@@ -63,7 +63,7 @@ public class Controller : MonoBehaviour
     {
         nextPosition = hit[0].point;
         Quaternion rot = Quaternion.FromToRotation(transform.up, hit[0].normal);
-        spriteTransform.rotation = rot;
+        transform.rotation = rot;
         landing = true;
     }
 
@@ -125,7 +125,7 @@ public class Controller : MonoBehaviour
 
     void AirVelocity()
     {
-        spriteTransform.rotation = Quaternion.Slerp(spriteTransform.rotation, Quaternion.identity, Time.deltaTime * 20);
+        transform.rotation = Quaternion.Slerp(transform.rotation, Quaternion.identity, Time.deltaTime * 20);
         Vector2 direccion = Vector2.right * inputX * speed * Time.deltaTime;
         transform.Translate(direccion);
     }
@@ -141,7 +141,7 @@ public class Controller : MonoBehaviour
         {
             Vector3 localAngle = transform.localEulerAngles;
             localAngle.y = localAngle.y == 180 ? 0 : 180;
-            transform.localEulerAngles = localAngle;
+            spriteTransform.localEulerAngles = localAngle;
             faceRight = !faceRight;
         }
     }
