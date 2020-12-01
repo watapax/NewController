@@ -8,62 +8,87 @@ public class Controller : MonoBehaviour
     public LayerMask groundLayer;
     public float speed = 1f;
     public float groundRayLenght = 0.11f;
-    public Transform rayOrigin;
-    public Transform spriteTransform;
+    public Transform rayGround, rayWall;
+    public Transform spriteRotTransform, spriteFlipTransform;
     public bool debugMode;
 
+    public float fallMultiplier = 2.5f;
+    public float lowJumpMultiplier = 2;
+    public float gravity = 9f;
+    public float maxFallVelocity = 30;
+    public float jumpForce = 10;
+
     Rigidbody2D rb;
-    RaycastHit2D[] hit, nextHit;
+    RaycastHit2D[] hitGround, hitNextGround,hitWallRight, hitWallLeft;
 
     int hitCount;
+   public  int jumpBuffer;
 
-    float rotationSpeed = 10;
+    public float rotationSpeed = 15;
     float inputX;
     float lastRayDistance;
 
+
     bool landing = false;
     bool faceRight = true;
+    bool isGrounded;
 
     Vector3 calculatedVelocity;
     Vector3 nextPosition;
+    Vector3 directionAngle = Vector3.zero;
+    Vector2 originWallRay;
+    Vector2 wallRayDirection;
+    Vector3 prevRayGroundPos;
+    public Vector3 velocity;
+
 
     void Awake()
     {
-        hit = new RaycastHit2D[1];
-        nextHit = new RaycastHit2D[1];
+        hitGround = new RaycastHit2D[1];
+        hitNextGround = new RaycastHit2D[1];
+        hitWallRight = new RaycastHit2D[1];
+        hitWallLeft = new RaycastHit2D[1];
         rb = GetComponent<Rigidbody2D>();
+        prevRayGroundPos = rayGround.position;
     }
 
     bool IsGrounded()
     {
         hitCount = 0;
-        Array.Clear(hit, 0, hit.Length);
-        hitCount = Physics2D.RaycastNonAlloc(rayOrigin.position, Vector2.down,  hit, groundRayLenght, groundLayer);
+        Array.Clear(hitGround, 0, hitGround.Length);
+        hitCount = Physics2D.RaycastNonAlloc(rayGround.position, Vector2.down,  hitGround, groundRayLenght, groundLayer);
         
         if(!landing && hitCount>0)
         {
             CheckLanding();
         }
 
-        return hitCount == 1;
+        isGrounded = hitCount == 1;
+        return isGrounded;
 
+    }
+
+    bool IsOnWall()
+    {
+        Array.Clear(hitWallRight, 0, hitWallRight.Length);
+       
+
+        return Physics2D.RaycastNonAlloc(rayWall.position, rayWall.right, hitWallRight, 0.08f, groundLayer) > 0;
     }
 
     void RotateSpriteOnGround()
     {
-        Quaternion rot = Quaternion.FromToRotation(transform.up, hit[0].normal);
-        float zAngle = rot.eulerAngles.z;
-        Vector3 nextAngle = Vector3.forward * zAngle;
-       // spriteTransform.localEulerAngles = Vector3.Lerp(spriteTransform.localEulerAngles, nextAngle, Time.deltaTime * rotationSpeed);
-        transform.rotation = Quaternion.Slerp(transform.rotation, rot, Time.deltaTime * rotationSpeed);
-
+        Quaternion rot = Quaternion.FromToRotation(transform.up, hitGround[0].normal);
+        spriteRotTransform.rotation = Quaternion.Slerp(spriteRotTransform.rotation, rot, Time.deltaTime * rotationSpeed);
     }   
 
     void CheckLanding()
     {
-        nextPosition = hit[0].point;
-        Quaternion rot = Quaternion.FromToRotation(transform.up, hit[0].normal);
-        transform.rotation = rot;
+        transform.position = hitGround[0].point;
+        Quaternion rot = Quaternion.FromToRotation(transform.up, hitGround[0].normal);
+        spriteRotTransform.rotation = rot;
+        calculatedVelocity.y = 0;
+        velocity.y = 0;
         landing = true;
     }
 
@@ -71,11 +96,12 @@ public class Controller : MonoBehaviour
     {
         if (debugMode)
         {
-            Vector3 hitPos = hit[0].point;
-            Vector3 hitNormal = hit[0].normal;
+            Vector3 hitPos = hitGround[0].point;
+            Vector3 hitNormal = hitGround[0].normal;
             Vector3 direction = Vector3.Cross(Vector3.forward, hitNormal);
             Debug.DrawRay(hitPos, direction * 1, Color.red);
-            Debug.DrawRay(rayOrigin.position, -transform.up * 2, Color.blue);
+            Debug.DrawRay(rayGround.position, -transform.up * 2, Color.blue);
+            Debug.DrawRay(rayWall.position, rayWall.right * 0.08f, Color.blue);
         }
     }
 
@@ -83,7 +109,7 @@ public class Controller : MonoBehaviour
     {     
         if(inputX == 0)
         {
-            if (hit[0].normal != Vector2.up)
+            if (hitGround[0].normal != Vector2.up)
             {
                 rb.velocity = Vector2.zero;
                 rb.constraints = RigidbodyConstraints2D.FreezeAll;
@@ -98,21 +124,21 @@ public class Controller : MonoBehaviour
 
     void GroundVelocity()
     {
-        if (inputX != 0)
+        if (inputX != 0 && !IsOnWall())
         {
-            transform.position = nextPosition;
-            Array.Clear(nextHit, 0, nextHit.Length);
-            calculatedVelocity = Vector3.Cross(Vector3.forward, hit[0].normal) * speed * -inputX;
+            Array.Clear(hitNextGround, 0, hitNextGround.Length);
+            calculatedVelocity = Vector3.Cross(Vector3.forward, hitGround[0].normal) * speed * -inputX;
             //rb.velocity = calculatedVelocity;
             Vector3 predictNextPosition = transform.position + calculatedVelocity * Time.deltaTime;
             Vector3 rayOrigin = predictNextPosition + Vector3.up;
             Debug.DrawRay(rayOrigin, Vector3.down * 1.5f, Color.magenta);
-            int hitCount = Physics2D.RaycastNonAlloc(rayOrigin, Vector3.down, hit, 1.5f, groundLayer);
+            int hitCount = Physics2D.RaycastNonAlloc(rayOrigin, Vector3.down, hitGround, 1.5f, groundLayer);
 
             if (hitCount > 0)
             {
-                nextPosition = hit[0].point;
-                lastRayDistance = hit[0].distance;
+                nextPosition = hitGround[0].point;
+                velocity = nextPosition - transform.position;
+                lastRayDistance = hitGround[0].distance;
             }
             else
             {
@@ -120,35 +146,106 @@ public class Controller : MonoBehaviour
             }
         }
         else
-            nextPosition = transform.position;
+            velocity = Vector3.zero;
+        
+
+ 
+    }
+
+
+    void PrevenirAtravezarPiso()
+    {
+        if(velocity.y < 0)
+        {
+            Vector3 direccionRayo = (rayGround.position - prevRayGroundPos).normalized;
+            float distanciaRayo = direccionRayo.magnitude;
+            RaycastHit2D hitPiso = Physics2D.Raycast(prevRayGroundPos, direccionRayo, distanciaRayo, groundLayer);
+            Debug.DrawRay(prevRayGroundPos, direccionRayo * distanciaRayo, Color.magenta);
+            if(hitPiso.collider != null)
+            {
+                transform.position = hitPiso.point;
+                velocity.y = 0;
+            }
+        }
+
+        prevRayGroundPos = rayGround.position;
+
+        
     }
 
     void AirVelocity()
     {
-        transform.rotation = Quaternion.Slerp(transform.rotation, Quaternion.identity, Time.deltaTime * 20);
-        Vector2 direccion = Vector2.right * inputX * speed * Time.deltaTime;
-        transform.Translate(direccion);
+
+        //if (velocity.y < 0)
+        //{
+        //    float lenght = rayGround.position.y - prevRayGroundPos.y;
+        //    RaycastHit2D checkGround = Physics2D.Raycast(prevRayGroundPos, Vector2.down, lenght, groundLayer);
+        //    Debug.DrawRay(prevRayGroundPos, Vector2.down * lenght, Color.cyan);
+        //    if(checkGround.collider!= null)
+        //    {
+        //        transform.position = checkGround.point;
+        //    }
+        //}
+
+        //spriteRotTransform.rotation = Quaternion.Slerp(transform.rotation, Quaternion.identity, Time.deltaTime * 20);
+        //Vector2 direccion = Vector2.right * inputX * speed * Time.deltaTime;
+        //velocity.x = inputX * speed * Time.deltaTime;
+        //velocity.y -= gravity * Time.deltaTime;
+
+
+        //if (velocity.y < maxFallVelocity)
+        //{
+        //    velocity = Vector2.ClampMagnitude(velocity, maxFallVelocity);
+        //}
+
+
+        //prevRayGroundPos = rayGround.position;
+
+
+        velocity.y += gravity * Time.deltaTime;
+
+        if (velocity.y < maxFallVelocity)
+        {
+            velocity = Vector2.ClampMagnitude(velocity, maxFallVelocity);
+        }
+
+
+
     }
+
+    void Jump()
+    {
+        if (Input.GetButtonDown("Jump"))
+        {
+            rb.velocity = new Vector2(rb.velocity.x, 0);
+            rb.AddForce(Vector2.up * jumpForce, ForceMode2D.Impulse);
+            calculatedVelocity.y = jumpForce;           
+        }
+    }
+
+
 
     void CheckInput()
     {
         inputX = Input.GetAxisRaw("Horizontal");
+       
     }
     
     void CheckFlip()
     {
-        if((inputX < 0 && faceRight)||(inputX>0 && !faceRight))
-        {
-            Vector3 localAngle = transform.localEulerAngles;
-            localAngle.y = localAngle.y == 180 ? 0 : 180;
-            spriteTransform.localEulerAngles = localAngle;
+        if((inputX < 0 && faceRight)||(inputX > 0 && !faceRight))
+        {           
             faceRight = !faceRight;
+            directionAngle.y = faceRight ? 0 : 180;
+            spriteFlipTransform.localEulerAngles = directionAngle; 
+
         }
     }
     
     void Update()
     {
         CheckInput();
+
     }
 
     void FixedUpdate()
@@ -158,13 +255,17 @@ public class Controller : MonoBehaviour
             GroundVelocity();
             RotateSpriteOnGround();
             FixSlope();
+            //Jump();
             MostrarRays();
         }
         else
         {
             landing = false;
             AirVelocity();
+            PrevenirAtravezarPiso();
             rb.constraints = RigidbodyConstraints2D.FreezeRotation;
         }
+        transform.position += velocity;
+        CheckFlip();
     }
 }
